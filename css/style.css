@@ -31,6 +31,10 @@ html, body {
   background: var(--bg-deep);
   color: var(--text-main);
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .hidden {
@@ -42,6 +46,10 @@ html, body {
   width: 100vw;
   height: 100vh;
   cursor: crosshair;
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* ==================== START / HERO SELECT SCREEN ==================== */
@@ -58,6 +66,8 @@ html, body {
     linear-gradient(160deg, #090e19 0%, #10192b 50%, #0b111e 100%);
   padding: 20px;
   overflow-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .start-container {
@@ -330,6 +340,16 @@ html, body {
   color: var(--text-muted);
 }
 
+.touch-controls-hint {
+  display: none;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
 kbd {
   display: inline-block;
   background: rgba(255, 255, 255, 0.12);
@@ -347,12 +367,19 @@ kbd {
   inset: 0;
   pointer-events: none;
   z-index: 10;
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #hud button,
 #hud .gold-pill,
+#hud .score-pill,
 #hud .minimap-wrap,
-#hud .quick-buy-item {
+#hud .quick-buy-item,
+#hud .rotate-hint,
+#hud .joystick-zone {
   pointer-events: auto;
 }
 
@@ -442,6 +469,13 @@ kbd {
   border-radius: 999px;
   padding: 6px 20px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.score-pill:hover {
+  border-color: var(--gold-bright);
+  background: rgba(22, 34, 58, 0.94);
 }
 
 .team-score {
@@ -855,6 +889,11 @@ kbd {
 }
 
 .spell-btn:hover { border-color: var(--gold); }
+.spell-btn.pressed {
+  transform: scale(0.92);
+  border-color: var(--gold-bright);
+  background: rgba(240, 201, 109, 0.24);
+}
 
 .spell-badge {
   position: absolute;
@@ -952,7 +991,12 @@ kbd {
 }
 
 .skill-btn:hover { border-color: var(--gold-bright); transform: translateY(-2px); }
-.skill-btn:active { transform: scale(0.95); }
+.skill-btn:active,
+.skill-btn.aiming {
+  transform: scale(0.94);
+  border-color: #74e3ff;
+  box-shadow: 0 0 22px rgba(116, 227, 255, 0.55);
+}
 .skill-btn.ult {
   width: 72px;
   height: 72px;
@@ -1014,7 +1058,12 @@ kbd {
   transition: transform 0.08s ease;
 }
 
-.attack-btn:active { transform: scale(0.92); }
+.attack-btn:active,
+.attack-btn.pressed {
+  transform: scale(0.91);
+  filter: brightness(1.12);
+  box-shadow: 0 0 28px rgba(255, 230, 153, 0.65);
+}
 .atk-icon { font-size: 26px; line-height: 1; }
 .atk-label { font-size: 12px; font-weight: 800; margin-top: 2px; }
 
@@ -1040,6 +1089,14 @@ kbd {
   max-width: 92vw;
   max-height: 88vh;
   overflow-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scoreboard-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .modal-header {
@@ -1262,6 +1319,713 @@ kbd {
 .end-stats {
   text-align: left;
   margin-bottom: 20px;
+}
+
+/* ==================== VIRTUAL JOYSTICK & PORTRAIT HINT ==================== */
+.joystick-zone {
+  display: none;
+  position: absolute;
+  left: max(6px, env(safe-area-inset-left));
+  bottom: max(6px, env(safe-area-inset-bottom));
+  width: 44vw;
+  max-width: 280px;
+  height: 48vh;
+  max-height: 260px;
+  z-index: 12;
+  touch-action: none;
+}
+
+body.touch-device .joystick-zone {
+  display: block;
+}
+
+.joystick-base {
+  position: absolute;
+  left: 88px;
+  top: calc(100% - 82px);
+  transform: translate(-50%, -50%);
+  width: 116px;
+  height: 116px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(240, 201, 109, 0.1) 0%, rgba(11, 18, 32, 0.45) 75%);
+  border: 2px solid rgba(240, 201, 109, 0.38);
+  box-shadow: 0 0 22px rgba(0, 0, 0, 0.4), inset 0 0 18px rgba(240, 201, 109, 0.14);
+  opacity: 0.78;
+  transition: opacity 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  pointer-events: none;
+}
+
+.joystick-base.active {
+  opacity: 1;
+  border-color: rgba(255, 230, 153, 0.88);
+  box-shadow: 0 0 26px rgba(240, 201, 109, 0.32), inset 0 0 20px rgba(240, 201, 109, 0.24);
+}
+
+.joystick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 50px;
+  height: 50px;
+  margin-left: -25px;
+  margin-top: -25px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffe699 0%, #d49b35 65%, #8a5b14 100%);
+  border: 2px solid rgba(255, 245, 209, 0.92);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+  will-change: transform;
+}
+
+.rotate-hint {
+  display: none;
+  position: absolute;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(13, 20, 35, 0.9);
+  border: 1px solid rgba(240, 201, 109, 0.55);
+  color: var(--gold-bright);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  z-index: 15;
+  cursor: pointer;
+}
+
+.rotate-hint.dismissed {
+  display: none !important;
+}
+
+.rotate-hint-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+@media (orientation: portrait) and (max-width: 760px) {
+  body.touch-device .rotate-hint {
+    display: flex;
+  }
+}
+
+/* ==================== TOUCH & COMPACT MOBILE HUD ==================== */
+body.touch-device .hud-key-guide,
+body.touch-device .key-pill,
+body.touch-device .spell-badge,
+body.touch-device .slot-role-tag,
+body.touch-device .controls-hint,
+body.touch-device .desktop-only {
+  display: none !important;
+}
+
+body.touch-device .touch-controls-hint {
+  display: flex;
+}
+
+/* Classic Honor of Kings Right-Thumb Skill Arc on Touch Devices */
+body.touch-device .hud-bottom-right {
+  bottom: max(10px, env(safe-area-inset-bottom));
+  right: max(12px, env(safe-area-inset-right));
+  gap: 8px;
+}
+
+body.touch-device .summoner-row {
+  gap: 6px;
+}
+
+body.touch-device .spell-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+}
+
+body.touch-device .spell-icon {
+  font-size: 16px;
+}
+
+body.touch-device .spell-label {
+  font-size: 9px;
+}
+
+body.touch-device .skill-arc {
+  position: relative;
+  display: block;
+  width: 170px;
+  height: 172px;
+}
+
+body.touch-device .skill-slot-wrap {
+  position: absolute;
+  gap: 0;
+}
+
+body.touch-device .skill-slot-wrap:nth-child(1) {
+  right: 98px;
+  bottom: 6px;
+}
+
+body.touch-device .skill-slot-wrap:nth-child(2) {
+  right: 78px;
+  bottom: 78px;
+}
+
+body.touch-device .skill-slot-wrap:nth-child(3) {
+  right: 6px;
+  bottom: 102px;
+}
+
+body.touch-device .skill-slot-wrap:nth-child(4) {
+  right: 0;
+  bottom: 0;
+}
+
+body.touch-device .skill-btn {
+  width: 58px;
+  height: 58px;
+}
+
+body.touch-device .skill-btn.ult {
+  width: 64px;
+  height: 64px;
+}
+
+body.touch-device .attack-btn {
+  width: 80px;
+  height: 80px;
+}
+
+body.touch-device .skill-icon {
+  font-size: 20px;
+}
+
+body.touch-device .skill-name {
+  font-size: 9.5px;
+  margin-top: 1px;
+  max-width: 50px;
+}
+
+body.touch-device .hero-status-card {
+  padding: 6px 10px;
+  gap: 8px;
+  border-radius: 12px;
+}
+
+body.touch-device .hero-avatar-box {
+  width: 38px;
+  height: 38px;
+  font-size: 20px;
+}
+
+body.touch-device .hero-level-badge {
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+}
+
+body.touch-device .hero-bars-area {
+  width: 146px;
+  gap: 3px;
+}
+
+body.touch-device .hero-stats-mini {
+  display: none;
+}
+
+body.touch-device .bar {
+  height: 12px;
+}
+
+body.touch-device .bar-text {
+  font-size: 9px;
+}
+
+body.touch-device .item-slots {
+  grid-template-columns: repeat(3, 21px);
+  grid-template-rows: repeat(2, 21px);
+  gap: 3px;
+}
+
+body.touch-device .item-slot {
+  width: 21px;
+  height: 21px;
+  font-size: 12px;
+}
+
+@media (max-width: 960px) {
+  .hud-key-guide,
+  .key-pill,
+  .spell-badge,
+  .slot-role-tag,
+  .controls-hint,
+  .desktop-only {
+    display: none !important;
+  }
+
+  .touch-controls-hint {
+    display: flex;
+  }
+
+  .hud-top-left {
+    top: max(8px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    gap: 6px;
+  }
+
+  #minimap-canvas {
+    width: 112px;
+    height: 112px;
+  }
+
+  .top-left-tools {
+    gap: 4px;
+  }
+
+  .icon-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+    border-radius: 7px;
+  }
+
+  .hud-top-center {
+    top: max(8px, env(safe-area-inset-top));
+    gap: 6px;
+  }
+
+  .score-pill {
+    padding: 4px 12px;
+    gap: 10px;
+  }
+
+  .team-score {
+    font-size: 17px;
+    min-width: 18px;
+  }
+
+  #match-timer {
+    font-size: 11px;
+  }
+
+  .kda-mini {
+    font-size: 10px;
+  }
+
+  .gold-pill {
+    padding: 5px 10px;
+    font-size: 12px;
+    gap: 4px;
+  }
+
+  .shop-tag {
+    display: none;
+  }
+
+  .hud-top-right {
+    top: max(8px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+    width: 190px;
+  }
+
+  .kill-entry {
+    padding: 3px 7px;
+    font-size: 10.5px;
+  }
+
+  .hud-left-quickbuy {
+    top: 126px;
+    left: max(8px, env(safe-area-inset-left));
+    gap: 5px;
+  }
+
+  .quick-buy-item {
+    padding: 5px 8px;
+    gap: 6px;
+    max-width: 158px;
+    border-radius: 8px;
+  }
+
+  .quick-buy-icon {
+    font-size: 16px;
+  }
+
+  .quick-buy-info strong {
+    font-size: 11px;
+  }
+
+  .quick-buy-info small {
+    font-size: 10px;
+  }
+
+  .announcer {
+    top: 56px;
+    padding: 6px 22px;
+  }
+
+  .announcer-title {
+    font-size: 18px;
+  }
+
+  .recall-bar {
+    bottom: 84px;
+    width: 190px;
+  }
+
+  .hud-bottom-center {
+    bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  .hero-status-card {
+    padding: 6px 9px;
+    gap: 8px;
+    border-radius: 11px;
+  }
+
+  .hero-avatar-box {
+    width: 36px;
+    height: 36px;
+    font-size: 19px;
+  }
+
+  .hero-level-badge {
+    width: 17px;
+    height: 17px;
+    font-size: 9.5px;
+  }
+
+  .hero-bars-area {
+    width: 138px;
+    gap: 3px;
+  }
+
+  .hero-stats-mini {
+    display: none;
+  }
+
+  .bar {
+    height: 12px;
+  }
+
+  .bar-text {
+    font-size: 9px;
+  }
+
+  .item-slots {
+    grid-template-columns: repeat(3, 20px);
+    grid-template-rows: repeat(2, 20px);
+    gap: 3px;
+  }
+
+  .item-slot {
+    width: 20px;
+    height: 20px;
+    font-size: 11px;
+  }
+
+  .hud-bottom-right {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    right: max(10px, env(safe-area-inset-right));
+    gap: 6px;
+  }
+
+  .summoner-row {
+    gap: 6px;
+  }
+
+  .spell-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+  }
+
+  .spell-icon {
+    font-size: 15px;
+  }
+
+  .spell-label {
+    font-size: 8.5px;
+  }
+
+  .skill-arc {
+    position: relative;
+    display: block;
+    width: 162px;
+    height: 164px;
+  }
+
+  .skill-slot-wrap {
+    position: absolute;
+    gap: 0;
+  }
+
+  .skill-slot-wrap:nth-child(1) {
+    right: 92px;
+    bottom: 6px;
+  }
+
+  .skill-slot-wrap:nth-child(2) {
+    right: 74px;
+    bottom: 74px;
+  }
+
+  .skill-slot-wrap:nth-child(3) {
+    right: 4px;
+    bottom: 96px;
+  }
+
+  .skill-slot-wrap:nth-child(4) {
+    right: 0;
+    bottom: 0;
+  }
+
+  .skill-btn {
+    width: 54px;
+    height: 54px;
+  }
+
+  .skill-btn.ult {
+    width: 60px;
+    height: 60px;
+  }
+
+  .attack-btn {
+    width: 76px;
+    height: 76px;
+  }
+
+  .atk-icon {
+    font-size: 23px;
+  }
+
+  .atk-label {
+    font-size: 11px;
+  }
+
+  .skill-icon {
+    font-size: 19px;
+  }
+
+  .skill-name {
+    font-size: 9px;
+    margin-top: 1px;
+    max-width: 46px;
+  }
+
+  /* Responsive Start Screen & Modals */
+  .overlay-screen {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .start-container {
+    padding: 16px 16px 20px;
+    border-radius: 14px;
+    margin: auto 0;
+  }
+
+  .game-title {
+    font-size: 26px;
+  }
+
+  .game-title span {
+    font-size: 15px;
+  }
+
+  .title-block {
+    margin-bottom: 12px;
+  }
+
+  .mode-selector,
+  .hero-selector {
+    margin-bottom: 12px;
+  }
+
+  .mode-btn {
+    padding: 9px 11px;
+  }
+
+  .mode-btn strong {
+    font-size: 13.5px;
+  }
+
+  .hero-card {
+    padding: 10px 8px;
+  }
+
+  .hero-card-avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 22px;
+    margin-bottom: 5px;
+  }
+
+  .hero-preview {
+    padding: 10px 12px;
+    margin-bottom: 14px;
+  }
+
+  .btn-primary-gold {
+    padding: 10px 36px;
+    font-size: 15px;
+  }
+
+  .modal-backdrop {
+    padding: 10px;
+  }
+
+  .modal-card {
+    padding: 14px 16px;
+    max-width: 96vw;
+    max-height: 92vh;
+    border-radius: 14px;
+  }
+
+  .modal-header {
+    margin-bottom: 12px;
+  }
+
+  .modal-header h2 {
+    font-size: 17px;
+  }
+
+  .shop-card,
+  .scoreboard-card,
+  .pause-card,
+  .end-card {
+    width: 100%;
+    max-width: 680px;
+  }
+
+  .shop-owned {
+    flex-wrap: wrap;
+    padding: 8px 10px;
+  }
+
+  .shop-owned-slots {
+    flex-wrap: wrap;
+  }
+
+  .end-banner {
+    font-size: 32px;
+  }
+}
+
+/* Narrow Screens / Portrait Phones: Move Hero Card under Minimap for Maximum Thumb Room */
+@media (max-width: 679px) {
+  #minimap-canvas {
+    width: 96px;
+    height: 96px;
+  }
+
+  .hud-top-center {
+    left: auto;
+    right: max(8px, env(safe-area-inset-right));
+    transform: none;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+
+  .hud-top-right {
+    top: 78px;
+    width: 168px;
+  }
+
+  .hud-bottom-center {
+    top: 110px;
+    left: max(8px, env(safe-area-inset-left));
+    bottom: auto;
+    transform: none;
+  }
+
+  .hero-status-card {
+    padding: 5px 8px;
+    gap: 6px;
+  }
+
+  .hero-avatar-box {
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+  }
+
+  .hero-bars-area {
+    width: 112px;
+  }
+
+  .item-slots {
+    display: none;
+  }
+
+  .hud-left-quickbuy {
+    top: 168px;
+  }
+
+  .rotate-hint {
+    top: auto;
+    bottom: 204px;
+  }
+
+  .joystick-base {
+    width: 108px;
+    height: 108px;
+    left: 78px;
+    top: calc(100% - 76px);
+  }
+
+  .joystick-knob {
+    width: 46px;
+    height: 46px;
+    margin-left: -23px;
+    margin-top: -23px;
+  }
+}
+
+/* Short Landscape Phones */
+@media (max-height: 460px) {
+  .overlay-screen {
+    align-items: flex-start;
+    padding: 8px 12px;
+  }
+
+  .start-container {
+    padding: 12px 16px;
+  }
+
+  .joystick-zone {
+    height: 54vh;
+    max-height: 210px;
+  }
+
+  .joystick-base {
+    width: 104px;
+    height: 104px;
+    left: 74px;
+    top: calc(100% - 68px);
+  }
+
+  .joystick-knob {
+    width: 44px;
+    height: 44px;
+    margin-left: -22px;
+    margin-top: -22px;
+  }
+
+  .hud-left-quickbuy {
+    top: 120px;
+  }
+
+  .quick-buy-item:nth-child(n + 2) {
+    display: none;
+  }
 }
 
 @media (max-width: 780px) {

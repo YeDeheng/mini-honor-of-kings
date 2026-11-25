@@ -1,0 +1,10 @@
+{
+  "name": "王者峡谷 · 极简版",
+  "short_name": "王者峡谷",
+  "description": "零依赖纯前端 5v5 / 3v3 / 1v1 俯视角 MOBA 对战",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0b101b",
+  "theme_color": "#0b101b"
+}

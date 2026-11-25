@@ -27,6 +27,62 @@ window.MiniHoK = window.MiniHoK || {};
 
   let hoveredSkillIndex = null;
 
+  // ==================== TOUCH CAPABILITY & STATE ====================
+  const hasCoarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  if (hasCoarsePointer || 'ontouchstart' in window || navigator.maxTouchPoints > 0) {
+    document.body.classList.add('touch-device');
+  }
+  window.addEventListener(
+    'touchstart',
+    () => {
+      if (!document.body.classList.contains('touch-device')) {
+        document.body.classList.add('touch-device');
+      }
+    },
+    { passive: true }
+  );
+
+  const joystick = {
+    touchId: null,
+    originX: 0,
+    originY: 0,
+    moveX: 0,
+    moveY: 0,
+    deadzone: 8,
+    maxRadius: 48,
+  };
+  let attackTouchId = null;
+  let touchAimSkill = null;
+
+  const joystickZone = document.getElementById('joystick-zone');
+  const joystickBase = document.getElementById('joystick-base');
+  const joystickKnob = document.getElementById('joystick-knob');
+  const attackBtn = document.getElementById('btn-attack');
+
+  function resetJoystick() {
+    joystick.touchId = null;
+    joystick.moveX = 0;
+    joystick.moveY = 0;
+    if (joystickBase) {
+      joystickBase.classList.remove('active');
+      joystickBase.style.left = '';
+      joystickBase.style.top = '';
+    }
+    if (joystickKnob) {
+      joystickKnob.style.transform = '';
+    }
+  }
+
+  function resetTouchControls() {
+    resetJoystick();
+    attackTouchId = null;
+    if (attackBtn) attackBtn.classList.remove('pressed');
+    if (touchAimSkill && touchAimSkill.btn) {
+      touchAimSkill.btn.classList.remove('aiming');
+    }
+    touchAimSkill = null;
+  }
+
   const ui = new MiniHoK.UI({
     onStart(modeId, heroId) {
       startMatch(modeId, heroId);
@@ -35,12 +91,17 @@ window.MiniHoK = window.MiniHoK || {};
       startMatch(lastMode, lastHeroId);
     },
     onBackToMenu() {
+      resetTouchControls();
       game = null;
       ui.showStartScreen();
     },
     onTogglePause() {
       if (!game || game.ended) return;
       game.paused = !game.paused;
+      if (game.paused) {
+        resetTouchControls();
+        input.attackHeld = false;
+      }
       ui.setPaused(game.paused);
     },
     onToggleCamera() {
@@ -50,6 +111,11 @@ window.MiniHoK = window.MiniHoK || {};
     onToggleShop(force) {
       if (!game || game.ended) return;
       ui.toggleShop(game, force);
+    },
+    onToggleScoreboard(force) {
+      if (!game || game.ended) return;
+      const shouldShow = force !== undefined ? force : !ui.isScoreboardOpen();
+      ui.setScoreboardVisible(shouldShow, game);
     },
     onBuyItem(itemId) {
       if (!game || !game.player) return;
@@ -88,11 +154,16 @@ window.MiniHoK = window.MiniHoK || {};
     input.moveTarget = null;
     input.attackHeld = false;
     input.attackTargetId = null;
+    resetTouchControls();
 
     game = new MiniHoK.GameEngine(modeId, heroId, {
       onAnnounce: (title, sub) => ui.showAnnouncer(title, sub),
       onKillFeed: (kn, kt, vn, vt) => ui.addKillFeed(kn, kt, vn, vt),
-      onGameEnd: (winner) => ui.showEndScreen(game, winner),
+      onGameEnd: (winner) => {
+        resetTouchControls();
+        input.attackHeld = false;
+        ui.showEndScreen(game, winner);
+      },
     });
 
     renderer.camera.locked = true;
@@ -126,6 +197,9 @@ window.MiniHoK = window.MiniHoK || {};
 
   // ==================== INPUT LISTENERS ====================
   window.addEventListener('resize', () => renderer.resize());
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => renderer.resize(), 120);
+  });
 
   window.addEventListener('keydown', (e) => {
     const code = e.code;
@@ -222,6 +296,7 @@ window.MiniHoK = window.MiniHoK || {};
   window.addEventListener('blur', () => {
     for (const k in keys) keys[k] = false;
     input.attackHeld = false;
+    resetTouchControls();
   });
 
   canvas.addEventListener('mousemove', (e) => {
@@ -264,6 +339,7 @@ window.MiniHoK = window.MiniHoK || {};
   });
 
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  canvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
 
   // Skill button hover shows targeting indicator on canvas
   for (let i = 0; i < 3; i++) {
@@ -272,7 +348,262 @@ window.MiniHoK = window.MiniHoK || {};
     btn.addEventListener('mouseleave', () => { hoveredSkillIndex = null; });
   }
 
-  // Minimap click pans camera (or right-click sets move target)
+  // ==================== MULTI-TOUCH MOBILE CONTROLS ====================
+  function findTouchById(touchList, id) {
+    for (let i = 0; i < touchList.length; i++) {
+      if (touchList[i].identifier === id) return touchList[i];
+    }
+    return null;
+  }
+
+  function computeTouchSkillAim(state) {
+    const player = game.player;
+    const skill = player.template.skills[state.skillIndex];
+    const maxRange = skill ? skill.range : 320;
+    const dist = Math.hypot(state.dx, state.dy);
+    if (!state.dragged || dist < 1) {
+      return game.getSmartAimPoint(player, maxRange, false);
+    }
+    const clampedRange = Math.min(maxRange, 600);
+    const dragRadius = 72;
+    const ratio = MiniHoK.Config.clamp(dist / dragRadius, 0.25, 1.0);
+    return {
+      x: player.x + (state.dx / dist) * clampedRange * ratio,
+      y: player.y + (state.dy / dist) * clampedRange * ratio,
+    };
+  }
+
+  // 1. Left-Thumb Floating Virtual Joystick
+  if (joystickZone && joystickBase && joystickKnob) {
+    joystickZone.addEventListener(
+      'touchstart',
+      (e) => {
+        if (!game || game.paused || game.ended) return;
+        if (joystick.touchId !== null) return;
+        e.preventDefault();
+        MiniHoK.Audio.init();
+        const t = e.changedTouches[0];
+        if (!t) return;
+
+        const rect = joystickZone.getBoundingClientRect();
+        const baseHalf = (joystickBase.offsetWidth || 116) / 2;
+        const cx = MiniHoK.Config.clamp(t.clientX - rect.left, baseHalf, Math.max(baseHalf, rect.width - baseHalf));
+        const cy = MiniHoK.Config.clamp(t.clientY - rect.top, baseHalf, Math.max(baseHalf, rect.height - baseHalf));
+
+        joystick.touchId = t.identifier;
+        joystick.originX = rect.left + cx;
+        joystick.originY = rect.top + cy;
+        joystick.moveX = 0;
+        joystick.moveY = 0;
+
+        joystickBase.style.left = `${cx}px`;
+        joystickBase.style.top = `${cy}px`;
+        joystickBase.classList.add('active');
+        joystickKnob.style.transform = 'translate3d(0, 0, 0)';
+      },
+      { passive: false }
+    );
+
+    joystickZone.addEventListener(
+      'touchmove',
+      (e) => {
+        if (joystick.touchId === null) return;
+        const t = findTouchById(e.changedTouches, joystick.touchId);
+        if (!t) return;
+        e.preventDefault();
+
+        const dx = t.clientX - joystick.originX;
+        const dy = t.clientY - joystick.originY;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist <= joystick.deadzone) {
+          joystick.moveX = 0;
+          joystick.moveY = 0;
+          joystickKnob.style.transform = 'translate3d(0, 0, 0)';
+        } else {
+          const clamped = Math.min(dist, joystick.maxRadius);
+          const nx = dx / dist;
+          const ny = dy / dist;
+          const mag = (clamped - joystick.deadzone) / (joystick.maxRadius - joystick.deadzone);
+          joystick.moveX = nx * mag;
+          joystick.moveY = ny * mag;
+          joystickKnob.style.transform = `translate3d(${(nx * clamped).toFixed(1)}px, ${(ny * clamped).toFixed(1)}px, 0)`;
+        }
+      },
+      { passive: false }
+    );
+
+    const endJoystickTouch = (e) => {
+      if (joystick.touchId === null) return;
+      const t = findTouchById(e.changedTouches, joystick.touchId);
+      if (!t) return;
+      e.preventDefault();
+      resetJoystick();
+    };
+    joystickZone.addEventListener('touchend', endJoystickTouch, { passive: false });
+    joystickZone.addEventListener('touchcancel', endJoystickTouch, { passive: false });
+  }
+
+  // 2. Right-Thumb Basic Attack Button (Multi-Touch)
+  if (attackBtn) {
+    attackBtn.addEventListener(
+      'touchstart',
+      (e) => {
+        e.preventDefault();
+        MiniHoK.Audio.init();
+        if (!game || game.paused || game.ended) return;
+        if (attackTouchId !== null) return;
+        const t = e.changedTouches[0];
+        if (!t) return;
+        attackTouchId = t.identifier;
+        input.attackHeld = true;
+        attackBtn.classList.add('pressed');
+      },
+      { passive: false }
+    );
+
+    const endAttackTouch = (e) => {
+      if (attackTouchId === null) return;
+      const t = findTouchById(e.changedTouches, attackTouchId);
+      if (!t) return;
+      e.preventDefault();
+      attackTouchId = null;
+      if (!keys.KeyJ && !keys.Space) {
+        input.attackHeld = false;
+      }
+      attackBtn.classList.remove('pressed');
+    };
+    attackBtn.addEventListener('touchend', endAttackTouch, { passive: false });
+    attackBtn.addEventListener('touchcancel', endAttackTouch, { passive: false });
+  }
+
+  // 3. Right-Thumb Skill Buttons (Tap Auto-Aim OR Hold-Drag-Aim)
+  for (let i = 0; i < 3; i++) {
+    const btn = document.getElementById(`btn-skill-${i}`);
+    if (!btn) continue;
+
+    btn.addEventListener(
+      'touchstart',
+      (e) => {
+        e.preventDefault();
+        MiniHoK.Audio.init();
+        if (!game || game.paused || game.ended || !game.player || !game.player.alive) return;
+        if (touchAimSkill !== null) return;
+        const t = e.changedTouches[0];
+        if (!t) return;
+
+        btn.classList.add('aiming');
+        touchAimSkill = {
+          skillIndex: i,
+          touchId: t.identifier,
+          startX: t.clientX,
+          startY: t.clientY,
+          dx: 0,
+          dy: 0,
+          dragged: false,
+          btn,
+        };
+      },
+      { passive: false }
+    );
+
+    btn.addEventListener(
+      'touchmove',
+      (e) => {
+        if (!touchAimSkill || touchAimSkill.skillIndex !== i) return;
+        const t = findTouchById(e.changedTouches, touchAimSkill.touchId);
+        if (!t) return;
+        e.preventDefault();
+
+        touchAimSkill.dx = t.clientX - touchAimSkill.startX;
+        touchAimSkill.dy = t.clientY - touchAimSkill.startY;
+        if (Math.hypot(touchAimSkill.dx, touchAimSkill.dy) > 16) {
+          touchAimSkill.dragged = true;
+        }
+      },
+      { passive: false }
+    );
+
+    btn.addEventListener(
+      'touchend',
+      (e) => {
+        if (!touchAimSkill || touchAimSkill.skillIndex !== i) return;
+        const t = findTouchById(e.changedTouches, touchAimSkill.touchId);
+        if (!t) return;
+        e.preventDefault();
+
+        const state = touchAimSkill;
+        btn.classList.remove('aiming');
+        touchAimSkill = null;
+
+        if (game && !game.paused && !game.ended && game.player && game.player.alive) {
+          const skill = game.player.template.skills[i];
+          const aim = state.dragged
+            ? computeTouchSkillAim(state)
+            : game.getSmartAimPoint(game.player, skill ? skill.range : 320, false);
+          game.castSkill(game.player, i, aim.x, aim.y);
+        }
+      },
+      { passive: false }
+    );
+
+    btn.addEventListener(
+      'touchcancel',
+      (e) => {
+        if (!touchAimSkill || touchAimSkill.skillIndex !== i) return;
+        const t = findTouchById(e.changedTouches, touchAimSkill.touchId);
+        if (!t) return;
+        e.preventDefault();
+        btn.classList.remove('aiming');
+        touchAimSkill = null;
+      },
+      { passive: false }
+    );
+  }
+
+  // 4. Summoner Spells Touch Support
+  function bindSummonerTouch(id, action) {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.addEventListener(
+      'touchstart',
+      (e) => {
+        e.preventDefault();
+        MiniHoK.Audio.init();
+        btn.classList.add('pressed');
+        if (!game || game.paused || game.ended || !game.player) return;
+        action();
+      },
+      { passive: false }
+    );
+    const clearPressed = () => btn.classList.remove('pressed');
+    btn.addEventListener('touchend', clearPressed, { passive: true });
+    btn.addEventListener('touchcancel', clearPressed, { passive: true });
+  }
+
+  bindSummonerTouch('btn-flash', () => {
+    if (joystick.moveX !== 0 || joystick.moveY !== 0) {
+      game.player.facing = Math.atan2(joystick.moveY, joystick.moveX);
+    }
+    const aim = game.getSmartAimPoint(game.player, MiniHoK.Config.FLASH_RANGE, true);
+    game.castFlash(game.player, aim.x, aim.y);
+  });
+  bindSummonerTouch('btn-heal', () => game.castHeal(game.player));
+  bindSummonerTouch('btn-recall', () => game.startRecall(game.player));
+
+  // Minimap click / touch pans camera (or right-click sets move target)
+  function panCameraFromMinimapClientPos(clientX, clientY) {
+    if (!game) return;
+    const rect = minimapCanvas.getBoundingClientRect();
+    const rx = MiniHoK.Config.clamp((clientX - rect.left) / rect.width, 0, 1);
+    const ry = MiniHoK.Config.clamp((clientY - rect.top) / rect.height, 0, 1);
+    const wx = rx * game.map.width;
+    const wy = ry * game.map.height;
+    renderer.camera.locked = false;
+    document.getElementById('btn-camera').classList.remove('active');
+    renderer.snapCameraTo(wx, wy, game.map);
+  }
+
   minimapCanvas.addEventListener('mousedown', (e) => {
     if (!game) return;
     const rect = minimapCanvas.getBoundingClientRect();
@@ -289,6 +620,26 @@ window.MiniHoK = window.MiniHoK || {};
       renderer.snapCameraTo(wx, wy, game.map);
     }
   });
+  minimapCanvas.addEventListener(
+    'touchstart',
+    (e) => {
+      if (!game) return;
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      if (t) panCameraFromMinimapClientPos(t.clientX, t.clientY);
+    },
+    { passive: false }
+  );
+  minimapCanvas.addEventListener(
+    'touchmove',
+    (e) => {
+      if (!game) return;
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      if (t) panCameraFromMinimapClientPos(t.clientX, t.clientY);
+    },
+    { passive: false }
+  );
   minimapCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
   function findEnemyNearPoint(wx, wy, pad) {
@@ -313,11 +664,13 @@ window.MiniHoK = window.MiniHoK || {};
     lastTime = now;
 
     if (game) {
-      // Read WASD / Arrow movement
-      input.moveX =
+      // Combine WASD / Arrow movement with virtual touch joystick
+      const kbMoveX =
         (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
-      input.moveY =
+      const kbMoveY =
         (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0);
+      input.moveX = kbMoveX + joystick.moveX;
+      input.moveY = kbMoveY + joystick.moveY;
 
       input.useMouseAim = isMouseAimActive();
       const worldAim = renderer.screenToWorld(input.mouseScreenX, input.mouseScreenY);
@@ -327,10 +680,13 @@ window.MiniHoK = window.MiniHoK || {};
       game.update(dt, input);
       renderer.updateCamera(game, dt);
 
-      const aimPreview =
-        hoveredSkillIndex !== null
-          ? { skillIndex: hoveredSkillIndex, aimX: input.aimX, aimY: input.aimY }
-          : null;
+      let aimPreview = null;
+      if (touchAimSkill && game.player && game.player.alive) {
+        const touchAim = computeTouchSkillAim(touchAimSkill);
+        aimPreview = { skillIndex: touchAimSkill.skillIndex, aimX: touchAim.x, aimY: touchAim.y };
+      } else if (hoveredSkillIndex !== null) {
+        aimPreview = { skillIndex: hoveredSkillIndex, aimX: input.aimX, aimY: input.aimY };
+      }
 
       renderer.render(game, aimPreview);
       ui.updateHUD(game);

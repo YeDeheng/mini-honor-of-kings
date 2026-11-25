@@ -2,7 +2,12 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0b101b" />
+  <link rel="manifest" href="manifest.json" />
   <title>王者峡谷 · 极简版 | Mini Honor of Kings</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
@@ -54,6 +59,11 @@
           <span><kbd>P</kbd> 商店</span>
           <span><kbd>Tab</kbd> 战绩</span>
         </div>
+        <div class="touch-controls-hint">
+          <span>🕹️ 左手摇杆移动</span>
+          <span>⚔️ 右手普攻 / 技能点按锁敌 · 拖动瞄准</span>
+          <span>🗺️ 点击小地图看视野 · 点比分看战绩</span>
+        </div>
       </div>
     </div>
   </div>
@@ -72,13 +82,14 @@
       <div class="top-left-tools">
         <button id="btn-sound" class="icon-btn" title="音效开关 (M)">🔊</button>
         <button id="btn-camera" class="icon-btn active" title="锁定视角 (Y)">🎯</button>
+        <button id="btn-fullscreen" class="icon-btn" title="全屏切换">⛶</button>
         <button id="btn-pause" class="icon-btn" title="暂停 / 返回菜单 (Esc)">⏸</button>
       </div>
     </div>
 
     <!-- Top-Center: Scoreboard Bar -->
     <div class="hud-top-center">
-      <div class="score-pill">
+      <div class="score-pill" id="btn-scoreboard" title="点击查看战绩 (Tab)">
         <span class="team-score blue" id="score-blue">0</span>
         <div class="match-meta">
           <span id="match-timer">00:00</span>
@@ -118,6 +129,19 @@
     <div id="recall-bar" class="recall-bar hidden">
       <div class="recall-label">正在回城...（移动或受伤将打断）</div>
       <div class="recall-track"><div class="recall-fill" id="recall-fill"></div></div>
+    </div>
+
+    <!-- Portrait Orientation Hint (Narrow Portrait Touch Screens) -->
+    <div id="rotate-hint" class="rotate-hint">
+      <span>📱 横屏游玩视野更佳</span>
+      <button id="btn-dismiss-rotate" class="rotate-hint-close" type="button" aria-label="关闭提示">✕</button>
+    </div>
+
+    <!-- Left-Thumb Virtual Joystick (Touch Devices) -->
+    <div id="joystick-zone" class="joystick-zone">
+      <div id="joystick-base" class="joystick-base">
+        <div id="joystick-knob" class="joystick-knob"></div>
+      </div>
     </div>
 
     <!-- Bottom-Left: Always-visible Keyboard Guide Bar -->
@@ -249,8 +273,11 @@
   <div id="scoreboard-modal" class="modal-backdrop hidden">
     <div class="modal-card scoreboard-card">
       <div class="modal-header">
-        <h2>对局战绩面板 <small>[按住 Tab 查看]</small></h2>
-        <span id="scoreboard-time">00:00</span>
+        <h2>对局战绩面板 <small class="desktop-only">[按住 Tab 查看]</small></h2>
+        <div class="scoreboard-header-right">
+          <span id="scoreboard-time">00:00</span>
+          <button class="close-btn" id="btn-close-scoreboard">✕</button>
+        </div>
       </div>
       <div class="scoreboard-teams">
         <div class="team-table blue-team">

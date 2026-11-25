@@ -10,6 +10,7 @@ MiniHoK.Renderer = class Renderer {
     this.camera = { x: 0, y: 0, locked: true };
     this.width = window.innerWidth;
     this.height = window.innerHeight;
+    this.zoom = 1.0;
     this.resize();
   }
 
@@ -17,6 +18,8 @@ MiniHoK.Renderer = class Renderer {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.width = window.innerWidth;
     this.height = window.innerHeight;
+    const minDim = Math.min(this.width, this.height);
+    this.zoom = minDim >= 720 ? 1.0 : MiniHoK.Config.clamp(minDim / 680, 0.56, 1.0);
     this.canvas.width = Math.floor(this.width * dpr);
     this.canvas.height = Math.floor(this.height * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -24,27 +27,31 @@ MiniHoK.Renderer = class Renderer {
 
   screenToWorld(sx, sy) {
     return {
-      x: sx + this.camera.x,
-      y: sy + this.camera.y,
+      x: sx / this.zoom + this.camera.x,
+      y: sy / this.zoom + this.camera.y,
     };
   }
 
   snapCameraTo(x, y, map) {
-    this.camera.x = MiniHoK.Config.clamp(x - this.width / 2, 0, Math.max(0, map.width - this.width));
-    this.camera.y = MiniHoK.Config.clamp(y - this.height / 2, 0, Math.max(0, map.height - this.height));
+    const viewW = this.width / this.zoom;
+    const viewH = this.height / this.zoom;
+    this.camera.x = MiniHoK.Config.clamp(x - viewW / 2, 0, Math.max(0, map.width - viewW));
+    this.camera.y = MiniHoK.Config.clamp(y - viewH / 2, 0, Math.max(0, map.height - viewH));
   }
 
   updateCamera(game, dt) {
     if (this.camera.locked && game.player) {
+      const viewW = this.width / this.zoom;
+      const viewH = this.height / this.zoom;
       const tx = MiniHoK.Config.clamp(
-        game.player.x - this.width / 2,
+        game.player.x - viewW / 2,
         0,
-        Math.max(0, game.map.width - this.width)
+        Math.max(0, game.map.width - viewW)
       );
       const ty = MiniHoK.Config.clamp(
-        game.player.y - this.height / 2,
+        game.player.y - viewH / 2,
         0,
-        Math.max(0, game.map.height - this.height)
+        Math.max(0, game.map.height - viewH)
       );
       const smooth = Math.min(1, dt * 10);
       this.camera.x += (tx - this.camera.x) * smooth;
@@ -57,6 +64,7 @@ MiniHoK.Renderer = class Renderer {
     ctx.clearRect(0, 0, this.width, this.height);
 
     ctx.save();
+    ctx.scale(this.zoom, this.zoom);
     ctx.translate(-this.camera.x, -this.camera.y);
 
     this.drawTerrain(ctx, game.map, game.time);
@@ -92,16 +100,18 @@ MiniHoK.Renderer = class Renderer {
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.032)';
     ctx.lineWidth = 1;
     const step = 110;
+    const viewW = this.width / this.zoom;
+    const viewH = this.height / this.zoom;
     const startX = Math.floor(this.camera.x / step) * step;
     const startY = Math.floor(this.camera.y / step) * step;
     ctx.beginPath();
-    for (let x = startX; x <= this.camera.x + this.width + step; x += step) {
+    for (let x = startX; x <= this.camera.x + viewW + step; x += step) {
       ctx.moveTo(x, this.camera.y);
-      ctx.lineTo(x, this.camera.y + this.height);
+      ctx.lineTo(x, this.camera.y + viewH);
     }
-    for (let y = startY; y <= this.camera.y + this.height + step; y += step) {
+    for (let y = startY; y <= this.camera.y + viewH + step; y += step) {
       ctx.moveTo(this.camera.x, y);
-      ctx.lineTo(this.camera.x + this.width, y);
+      ctx.lineTo(this.camera.x + viewW, y);
     }
     ctx.stroke();
 
@@ -779,8 +789,8 @@ MiniHoK.Renderer = class Renderer {
     ctx.strokeRect(
       this.camera.x * scale,
       this.camera.y * scale,
-      this.width * scale,
-      this.height * scale
+      (this.width / this.zoom) * scale,
+      (this.height / this.zoom) * scale
     );
   }
 };

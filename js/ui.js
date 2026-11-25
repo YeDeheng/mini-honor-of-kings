@@ -45,13 +45,19 @@ MiniHoK.UI = class UI {
 
       btnSound: document.getElementById('btn-sound'),
       btnCamera: document.getElementById('btn-camera'),
+      btnFullscreen: document.getElementById('btn-fullscreen'),
       btnPause: document.getElementById('btn-pause'),
+      btnScoreboard: document.getElementById('btn-scoreboard'),
+      btnCloseScoreboard: document.getElementById('btn-close-scoreboard'),
       btnOpenShop: document.getElementById('btn-open-shop'),
       btnCloseShop: document.getElementById('btn-close-shop'),
       shopModal: document.getElementById('shop-modal'),
       shopGold: document.getElementById('shop-gold'),
       shopOwnedSlots: document.getElementById('shop-owned-slots'),
       shopGrid: document.getElementById('shop-grid'),
+
+      rotateHint: document.getElementById('rotate-hint'),
+      btnDismissRotate: document.getElementById('btn-dismiss-rotate'),
 
       scoreboardModal: document.getElementById('scoreboard-modal'),
       scoreboardTime: document.getElementById('scoreboard-time'),
@@ -161,6 +167,71 @@ MiniHoK.UI = class UI {
       }
     });
 
+    if (this.el.btnFullscreen) {
+      const updateFsBtn = () => {
+        const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        this.el.btnFullscreen.classList.toggle('active', isFs);
+      };
+      this.el.btnFullscreen.addEventListener('click', () => {
+        const docEl = document.documentElement;
+        const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        try {
+          if (!isFs) {
+            const req = docEl.requestFullscreen || docEl.webkitRequestFullscreen;
+            if (req) {
+              const p = req.call(docEl);
+              if (p && typeof p.catch === 'function') p.catch(() => {});
+            }
+          } else {
+            const exit = document.exitFullscreen || document.webkitExitFullscreen;
+            if (exit) {
+              const p = exit.call(document);
+              if (p && typeof p.catch === 'function') p.catch(() => {});
+            }
+          }
+        } catch (err) {
+          // Graceful fallback when fullscreen API is unavailable
+        }
+      });
+      document.addEventListener('fullscreenchange', updateFsBtn);
+      document.addEventListener('webkitfullscreenchange', updateFsBtn);
+    }
+
+    if (this.el.btnScoreboard) {
+      this.el.btnScoreboard.addEventListener('click', () => {
+        if (this.handlers.onToggleScoreboard) this.handlers.onToggleScoreboard();
+      });
+    }
+    if (this.el.btnCloseScoreboard) {
+      this.el.btnCloseScoreboard.addEventListener('click', () => {
+        if (this.handlers.onToggleScoreboard) this.handlers.onToggleScoreboard(false);
+      });
+    }
+    if (this.el.scoreboardModal) {
+      this.el.scoreboardModal.addEventListener('click', (e) => {
+        if (e.target === this.el.scoreboardModal && this.handlers.onToggleScoreboard) {
+          this.handlers.onToggleScoreboard(false);
+        }
+      });
+    }
+    if (this.el.shopModal) {
+      this.el.shopModal.addEventListener('click', (e) => {
+        if (e.target === this.el.shopModal && this.handlers.onToggleShop) {
+          this.handlers.onToggleShop(false);
+        }
+      });
+    }
+    if (this.el.rotateHint) {
+      const dismissRotate = () => this.el.rotateHint.classList.add('dismissed');
+      if (this.el.btnDismissRotate) {
+        this.el.btnDismissRotate.addEventListener('click', (e) => {
+          e.stopPropagation();
+          dismissRotate();
+        });
+      }
+      this.el.rotateHint.addEventListener('click', dismissRotate);
+    }
+
     this.el.btnPause.addEventListener('click', () => this.handlers.onTogglePause && this.handlers.onTogglePause());
     this.el.btnResume.addEventListener('click', () => this.handlers.onTogglePause && this.handlers.onTogglePause());
     this.el.btnRestart.addEventListener('click', () => this.handlers.onRestart && this.handlers.onRestart());
@@ -221,6 +292,10 @@ MiniHoK.UI = class UI {
   setScoreboardVisible(visible, game) {
     this.el.scoreboardModal.classList.toggle('hidden', !visible);
     if (visible && game) this.renderScoreboard(game);
+  }
+
+  isScoreboardOpen() {
+    return !this.el.scoreboardModal.classList.contains('hidden');
   }
 
   toggleShop(game, forceState) {
