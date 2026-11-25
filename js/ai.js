@@ -45,6 +45,7 @@ MiniHoK.AI = (function () {
     if (!hero.alive) return;
 
     hero.aiTimer = (hero.aiTimer || 0) - dt;
+    hero.aiSkillGap = Math.max(0, (hero.aiSkillGap || 0) - dt);
     if (hero.aiTimer <= 0) {
       hero.aiTimer = 0.25 + Math.random() * 0.15;
       tryAIShop(hero, game);
@@ -143,8 +144,11 @@ MiniHoK.AI = (function () {
       if (target.type === 'hero') {
         tryAICastSkills(hero, target, d, game);
       } else if (target.type === 'minion' && hero.mp > hero.stats.maxMp * 0.55) {
-        if (hero.skillCds[0] <= 0 && d < 280) {
-          game.castSkill(hero, 0, target.x, target.y);
+        if ((hero.aiSkillGap || 0) <= 0 && hero.skillCds[0] <= 0 && d < 280) {
+          const aim = getAIAimPoint(hero, target, hero.template.skills[0]);
+          if (game.castSkill(hero, 0, aim.x, aim.y)) {
+            hero.aiSkillGap = 0.85 + Math.random() * 0.5;
+          }
         }
       }
 
@@ -207,25 +211,49 @@ MiniHoK.AI = (function () {
     }
   }
 
+  function getAIAimPoint(hero, target, skill) {
+    if (!skill || skill.type === 'self') {
+      return { x: target.x, y: target.y };
+    }
+    const baseAng = angle(hero.x, hero.y, target.x, target.y);
+    const targetDist = Math.max(40, dist(hero.x, hero.y, target.x, target.y));
+    const offset = (Math.random() * 2 - 1) * 0.14;
+    return {
+      x: hero.x + Math.cos(baseAng + offset) * targetDist,
+      y: hero.y + Math.sin(baseAng + offset) * targetDist,
+    };
+  }
+
   function tryAICastSkills(hero, target, d, game) {
-    // Skill 3 (Ultimate)
+    if ((hero.aiSkillGap || 0) > 0) return;
+
+    // Skill 3 (Ultimate - unlocked at Level 4)
     const s2 = hero.template.skills[2];
-    if (hero.skillCds[2] <= 0 && hero.mp >= s2.mana && d <= Math.min(s2.range, 520)) {
+    if (hero.level >= 4 && hero.skillCds[2] <= 0 && hero.mp >= s2.mana && d <= Math.min(s2.range, 520)) {
       if (target.hp / target.stats.maxHp < 0.72 || d < 280) {
-        game.castSkill(hero, 2, target.x, target.y);
-        return;
+        const aim = getAIAimPoint(hero, target, s2);
+        if (game.castSkill(hero, 2, aim.x, aim.y)) {
+          hero.aiSkillGap = 0.85 + Math.random() * 0.5;
+          return;
+        }
       }
     }
     // Skill 2
     const s1 = hero.template.skills[1];
     if (hero.skillCds[1] <= 0 && hero.mp >= s1.mana && d <= s1.range + 20) {
-      game.castSkill(hero, 1, target.x, target.y);
-      return;
+      const aim = getAIAimPoint(hero, target, s1);
+      if (game.castSkill(hero, 1, aim.x, aim.y)) {
+        hero.aiSkillGap = 0.85 + Math.random() * 0.5;
+        return;
+      }
     }
     // Skill 1
     const s0 = hero.template.skills[0];
     if (hero.skillCds[0] <= 0 && hero.mp >= s0.mana && d <= Math.max(s0.range, 280)) {
-      game.castSkill(hero, 0, target.x, target.y);
+      const aim = getAIAimPoint(hero, target, s0);
+      if (game.castSkill(hero, 0, aim.x, aim.y)) {
+        hero.aiSkillGap = 0.85 + Math.random() * 0.5;
+      }
     }
   }
 

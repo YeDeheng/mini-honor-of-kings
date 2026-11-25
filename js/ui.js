@@ -345,11 +345,16 @@ MiniHoK.UI = class UI {
       const cdEl = document.getElementById(`cd-skill-${i}`);
       const cd = p.skillCds[i];
       const skill = p.template.skills[i];
+      const locked = i === 2 && p.level < 4;
       const onCd = cd > 0.05;
-      btn.classList.toggle('on-cd', onCd);
-      btn.classList.toggle('no-mana', !onCd && p.mp < skill.mana);
-      cdEl.classList.toggle('visible', onCd);
-      if (onCd) cdEl.textContent = cd >= 1 ? Math.ceil(cd) : cd.toFixed(1);
+      btn.classList.toggle('on-cd', locked || onCd);
+      btn.classList.toggle('no-mana', !locked && !onCd && p.mp < skill.mana);
+      cdEl.classList.toggle('visible', locked || onCd);
+      if (locked) {
+        cdEl.textContent = '4级';
+      } else if (onCd) {
+        cdEl.textContent = cd >= 1 ? Math.ceil(cd) : cd.toFixed(1);
+      }
     }
 
     // Summoner spells CD

@@ -353,8 +353,9 @@ MiniHoK.GameEngine = class GameEngine {
     if (hero.stunTimer > 0) return;
 
     if (hero.buffs.angelaLaser > 0) {
+      let desired = hero.buffs.angelaLaserAngle;
+      let turnRate = 2.4;
       if (hero.isPlayer && input) {
-        let desired = hero.buffs.angelaLaserAngle;
         if (input.moveX !== 0 || input.moveY !== 0) {
           desired = Math.atan2(input.moveY, input.moveX);
         } else if (input.useMouseAim) {
@@ -363,12 +364,16 @@ MiniHoK.GameEngine = class GameEngine {
           const smart = this.getSmartAimPoint(hero, 520, false);
           desired = this.cfg.angle(hero.x, hero.y, smart.x, smart.y);
         }
-        let diff = desired - hero.buffs.angelaLaserAngle;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        hero.buffs.angelaLaserAngle += this.cfg.clamp(diff, -2.4 * dt, 2.4 * dt);
-        hero.facing = hero.buffs.angelaLaserAngle;
+      } else {
+        turnRate = 1.2;
+        const smart = this.getSmartAimPoint(hero, 520, false);
+        desired = this.cfg.angle(hero.x, hero.y, smart.x, smart.y);
       }
+      let diff = desired - hero.buffs.angelaLaserAngle;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      hero.buffs.angelaLaserAngle += this.cfg.clamp(diff, -turnRate * dt, turnRate * dt);
+      hero.facing = hero.buffs.angelaLaserAngle;
       return;
     }
 
@@ -410,7 +415,7 @@ MiniHoK.GameEngine = class GameEngine {
       bf.arthurWTick -= dt;
       if (bf.arthurWTick <= 0) {
         bf.arthurWTick = 0.42;
-        const dmg = 42 + hero.stats.ad * 0.46 + hero.level * 6;
+        const dmg = 36 + hero.stats.ad * 0.38 + hero.level * 5;
         this.forEachEnemyInRadius(hero.team, hero.x, hero.y, 138, (enemy) => {
           this.dealDamage(hero, enemy, dmg, 'physical');
         });
@@ -422,12 +427,12 @@ MiniHoK.GameEngine = class GameEngine {
       bf.angelaLaser -= dt;
       bf.angelaLaserTick -= dt;
       if (bf.angelaLaserTick <= 0) {
-        bf.angelaLaserTick = 0.16;
+        bf.angelaLaserTick = 0.22;
         const range = 470;
         const ang = bf.angelaLaserAngle;
         const x2 = hero.x + Math.cos(ang) * range;
         const y2 = hero.y + Math.sin(ang) * range;
-        const dmg = 46 + hero.stats.ap * 0.42 + hero.level * 7;
+        const dmg = 32 + hero.stats.ap * 0.28 + hero.level * 5;
         for (const enemy of this.getAllEnemyUnits(hero.team)) {
           if (this.pointToSegmentDist(enemy.x, enemy.y, hero.x, hero.y, x2, y2) <= enemy.radius + 26) {
             this.dealDamage(hero, enemy, dmg, 'magic');
@@ -649,6 +654,11 @@ MiniHoK.GameEngine = class GameEngine {
     const skill = hero.template.skills[index];
     if (!skill) return false;
 
+    if (index === 2 && hero.level < 4) {
+      if (hero.isPlayer) this.spawnFloatingText(hero.x, hero.y - 34, '4级解锁大招', '#ffe066');
+      return false;
+    }
+
     // Special case: Li Bai Q stages 1 & 2 work while cooldown is 0 and window active
     const isLiBaiFollowup = hero.template.id === 'libai' && index === 0 && hero.buffs.libaiQStage > 0;
     if (!isLiBaiFollowup) {
@@ -708,12 +718,17 @@ MiniHoK.GameEngine = class GameEngine {
     // -------------------- ANGELA (安琪拉) --------------------
     if (id === 'angela') {
       if (index === 0) {
+        const castId = this.genId('angelaQ');
+        const hitCounts = {};
         [-0.18, -0.09, 0, 0.09, 0.18].forEach((offset) => {
           this.projectiles.push({
             id: this.genId('p'),
             owner: hero,
             team: hero.team,
             kind: 'skillshot',
+            castId,
+            hitCounts,
+            repeatHitMult: 0.45,
             x: hero.x + Math.cos(ang + offset) * 20,
             y: hero.y + Math.sin(ang + offset) * 20,
             vx: Math.cos(ang + offset) * 660,
@@ -721,7 +736,7 @@ MiniHoK.GameEngine = class GameEngine {
             radius: 10,
             rangeLeft: skill.range,
             color: '#ff7b3b',
-            damage: 58 + hero.stats.ap * 0.4 + hero.level * 5,
+            damage: 36 + hero.stats.ap * 0.28 + hero.level * 4,
             damageType: 'magic',
             pierce: false,
           });
@@ -734,20 +749,20 @@ MiniHoK.GameEngine = class GameEngine {
           kind: 'angelaW',
           x: hero.x + Math.cos(ang) * 22,
           y: hero.y + Math.sin(ang) * 22,
-          vx: Math.cos(ang) * 540,
-          vy: Math.sin(ang) * 540,
+          vx: Math.cos(ang) * 460,
+          vy: Math.sin(ang) * 460,
           radius: 16,
           rangeLeft: skill.range,
           color: '#ff4d29',
-          damage: 110 + hero.stats.ap * 0.72 + hero.level * 10,
+          damage: 78 + hero.stats.ap * 0.48 + hero.level * 7,
           damageType: 'magic',
           aoeRadius: skill.aoeRadius,
         });
       } else if (index === 2) {
-        hero.shield = Math.max(hero.shield, 200 + hero.stats.ap * 0.9);
-        hero.shieldTimer = 2.4;
-        hero.buffs.angelaLaser = 1.85;
-        hero.buffs.angelaLaserTick = 0;
+        hero.shield = Math.max(hero.shield, 140 + hero.stats.ap * 0.55);
+        hero.shieldTimer = 2.0;
+        hero.buffs.angelaLaser = 1.6;
+        hero.buffs.angelaLaserTick = 0.08;
         hero.buffs.angelaLaserAngle = ang;
       }
       return true;
@@ -766,7 +781,7 @@ MiniHoK.GameEngine = class GameEngine {
         this.spawnParticles(tx, ty, '#ffe066', 16);
         this.forEachEnemyInRadius(hero.team, tx, ty, skill.aoeRadius, (e) => {
           const isCenter = this.cfg.dist(tx, ty, e.x, e.y) < skill.aoeRadius * 0.45;
-          const dmg = (120 + hero.stats.ad * 0.85 + hero.level * 10) * (isCenter ? 1.35 : 1.0);
+          const dmg = (95 + hero.stats.ad * 0.68 + hero.level * 8) * (isCenter ? 1.3 : 1.0);
           this.dealDamage(hero, e, dmg, 'magic');
           if (e.type === 'hero' || e.type === 'minion') {
             e.slowTimer = Math.max(e.slowTimer || 0, 2.0);
@@ -788,7 +803,7 @@ MiniHoK.GameEngine = class GameEngine {
           radius: 22,
           rangeLeft: skill.range,
           color: '#ff9500',
-          damage: 210 + hero.stats.ad * 1.15 + hero.level * 14,
+          damage: 175 + hero.stats.ad * 0.95 + hero.level * 12,
           damageType: 'magic',
         });
       }
@@ -801,12 +816,12 @@ MiniHoK.GameEngine = class GameEngine {
         const bf = hero.buffs;
         if (bf.libaiQStage === 0) {
           bf.libaiShadow = { x: hero.x, y: hero.y };
-          this.dashAndStrike(hero, ang, skill.range, 105 + hero.stats.ad * 0.85, 0.45);
+          this.dashAndStrike(hero, ang, skill.range, 82 + hero.stats.ad * 0.68, 0.45);
           bf.libaiQStage = 1;
           bf.libaiQWindow = 4.0;
           hero.skillCds[0] = 0.25;
         } else if (bf.libaiQStage === 1) {
-          this.dashAndStrike(hero, ang, skill.range, 115 + hero.stats.ad * 0.9, 0.45);
+          this.dashAndStrike(hero, ang, skill.range, 90 + hero.stats.ad * 0.72, 0.45);
           bf.libaiQStage = 2;
           bf.libaiQWindow = 3.5;
           hero.skillCds[0] = 0.25;
@@ -826,7 +841,7 @@ MiniHoK.GameEngine = class GameEngine {
         hero.untargetable = Math.max(hero.untargetable, 0.55);
         this.spawnRingEffect(hero.x, hero.y, skill.range, '#74e3ff', 0.65);
         this.spawnParticles(hero.x, hero.y, '#99eeff', 18);
-        const dmg = 135 + hero.stats.ad * 0.95 + hero.level * 10;
+        const dmg = 110 + hero.stats.ad * 0.78 + hero.level * 8;
         this.forEachEnemyInRadius(hero.team, hero.x, hero.y, skill.range, (e) => {
           this.dealDamage(hero, e, dmg, 'physical');
           if (e.type === 'hero' || e.type === 'minion') {
@@ -846,10 +861,10 @@ MiniHoK.GameEngine = class GameEngine {
           x: cx,
           y: cy,
           radius: 155,
-          duration: 0.78,
+          duration: 0.72,
           tickInterval: 0.15,
-          tickTimer: 0,
-          damage: 74 + hero.stats.ad * 0.55 + hero.level * 7,
+          tickTimer: 0.04,
+          damage: 56 + hero.stats.ad * 0.44 + hero.level * 6,
           damageType: 'physical',
           color: '#5ad8ff',
         });
@@ -1294,7 +1309,15 @@ MiniHoK.GameEngine = class GameEngine {
             if (p.kind === 'angelaW') {
               this.detonateAngelaW(p);
             } else {
-              this.dealDamage(p.owner, u, p.damage, p.damageType);
+              let dmg = p.damage;
+              if (p.castId && p.hitCounts) {
+                const prevHits = p.hitCounts[u.id] || 0;
+                p.hitCounts[u.id] = prevHits + 1;
+                if (prevHits > 0) {
+                  dmg *= p.repeatHitMult || 0.45;
+                }
+              }
+              this.dealDamage(p.owner, u, dmg, p.damageType);
               this.spawnParticles(p.x, p.y, p.color, 6);
             }
             exploded = true;
@@ -1318,7 +1341,7 @@ MiniHoK.GameEngine = class GameEngine {
     this.forEachEnemyInRadius(p.team, p.x, p.y, p.aoeRadius, (e) => {
       this.dealDamage(p.owner, e, p.damage, 'magic');
       if (e.type === 'hero' || e.type === 'minion') {
-        e.stunTimer = Math.max(e.stunTimer || 0, 1.1);
+        e.stunTimer = Math.max(e.stunTimer || 0, 0.85);
       }
     });
     // Persistent fire vortex zone
@@ -1330,10 +1353,10 @@ MiniHoK.GameEngine = class GameEngine {
       x: p.x,
       y: p.y,
       radius: p.aoeRadius,
-      duration: 2.2,
+      duration: 1.8,
       tickInterval: 0.45,
       tickTimer: 0.35,
-      damage: 34 + p.owner.stats.ap * 0.28,
+      damage: 22 + p.owner.stats.ap * 0.18,
       damageType: 'magic',
       color: '#ff6b35',
     });
@@ -1618,6 +1641,7 @@ MiniHoK.GameEngine = class GameEngine {
     if (hero.level >= this.cfg.MAX_LEVEL) return;
     hero.xp += amount;
     while (hero.level < this.cfg.MAX_LEVEL && hero.xp >= this.cfg.xpForLevel(hero.level)) {
+      const prevLevel = hero.level;
       hero.xp -= this.cfg.xpForLevel(hero.level);
       hero.level++;
       this.recalcStats(hero, false);
@@ -1625,7 +1649,14 @@ MiniHoK.GameEngine = class GameEngine {
       hero.mp = Math.min(hero.stats.maxMp, hero.mp + 65);
       this.spawnRingEffect(hero.x, hero.y, 58, '#b197fc', 0.55);
       if (hero.isPlayer) {
-        this.spawnFloatingText(hero.x, hero.y - 46, `升级 Lv.${hero.level}!`, '#d0bfff', 15);
+        const unlockedUlt = prevLevel < 4 && hero.level >= 4;
+        this.spawnFloatingText(
+          hero.x,
+          hero.y - 46,
+          unlockedUlt ? '升级 Lv.4! 大招已解锁!' : `升级 Lv.${hero.level}!`,
+          unlockedUlt ? '#ffe066' : '#d0bfff',
+          15
+        );
         MiniHoK.Audio.play('levelup');
       }
     }
